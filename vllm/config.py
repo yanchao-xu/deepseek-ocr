@@ -1,15 +1,3 @@
-# API Configuration
-API_HOST = '0.0.0.0'
-API_PORT = 8000
-
-# Frontend Configuration
-FRONTEND_PORT = 3000
-
-# Model Configuration
-
-# Upload Configuration
-MAX_UPLOAD_SIZE_MB = 100
-
 # TODO: change modes
 # Tiny: base_size = 512, image_size = 512, crop_mode = False
 # Small: base_size = 640, image_size = 640, crop_mode = False

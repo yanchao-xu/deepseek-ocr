@@ -18,18 +18,18 @@ def main():
     print("🚀 启动 DeepSeek-OCR API 服务...")
     
     # 检查是否在正确的目录
-    if not os.path.exists("main_hf.py"):
+    if not os.path.exists("hf/main_hf.py"):
         print("❌ 错误: 请在 deepseek-ocr 项目根目录下运行此脚本")
         sys.exit(1)
     
     # 检查是否存在 config.py
-    if not os.path.exists("config.py"):
+    if not os.path.exists("hf/config.py"):
         print("❌ 错误: 找不到 config.py 文件")
         sys.exit(1)
     
     try:
         # 启动服务
-        subprocess.run([sys.executable, "main_hf.py"], check=True)
+        subprocess.run([sys.executable, "hf/main_hf.py"], check=True)
     except KeyboardInterrupt:
         print("\n🛑 服务已停止")
     except subprocess.CalledProcessError as e:
