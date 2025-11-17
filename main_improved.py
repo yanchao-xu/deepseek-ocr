@@ -10,8 +10,8 @@ import json
 from vllm import AsyncLLMEngine
 from vllm.engine.arg_utils import AsyncEngineArgs
 from vllm.model_executor.models.registry import ModelRegistry
-from deepseek_ocr import DeepseekOCRForCausalLM
-from config import MODEL_PATH
+from vllm.deepseek_ocr import DeepseekOCRForCausalLM
+from vllm.config import MODEL_PATH
 from utils.file_processor import (
     load_image_from_bytes, 
     extract_text_from_pdf, 
