@@ -7,7 +7,7 @@ import torch
 from vllm import LLM
 from vllm.model_executor.models.registry import ModelRegistry
 from deepseek_ocr import DeepseekOCRForCausalLM
-from config import MODEL_PATH, PROMPT, MAX_CONCURRENCY, INPUT_PATH
+from config import MODEL_PATH, PROMPT, MAX_CONCURRENCY
 from utils.file_processor import download_file, get_file_type, pdf_to_images, load_image_from_url
 from utils.ocr_engine import process_images_batch_ocr
 from utils.callback_handler import send_callback, create_success_callback, create_error_callback

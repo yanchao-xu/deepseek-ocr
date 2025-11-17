@@ -2,19 +2,20 @@
 
 ## 启动方法
 
-### 方法 1: 使用启动脚本
+### 启动vllm
+
+到vllm目录下
+
 ```bash
-python start.py
+python start_vllm.py
 ```
 
-### 方法 2: 直接启动
-```bash
-python main_hf.py
-```
+### 启动hf
 
-### 方法 3: 使用 uvicorn 启动
+到hf目录下
+
 ```bash
-uvicorn main_hf:app --host 0.0.0.0 --port 8000
+python start_hf.py
 ```
 
 ## 启动前准备
@@ -25,14 +26,15 @@ uvicorn main_hf:app --host 0.0.0.0 --port 8000
 
 ## 访问服务
 
-- API 文档: http://localhost:8000/docs
-- 健康检查: http://localhost:8000/health
-- OCR 接口: http://localhost:8000/api/ocr
+- API 文档: <http://localhost:9003/docs>
+- 健康检查: <http://localhost:9003/health>
+- OCR 接口: <http://localhost:9003/api/ocr>
 
 ## 配置说明
 
 在 `config.py` 中可以修改:
+
 - `API_HOST`: 服务监听地址 (默认: 0.0.0.0)
-- `API_PORT`: 服务端口 (默认: 8000)
+- `API_PORT`: 服务端口 (默认: 9003)
 - `MODEL_PATH`: 模型文件路径
 - `BASE_SIZE`, `IMAGE_SIZE`, `CROP_MODE`: 处理参数

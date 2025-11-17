@@ -8,13 +8,7 @@
 
 ```bash
 
-  
-uv pip install torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0 --index-url https: //download.pytorch.org/whl/cu118
-uv pip install vllm-0.8.5+cu118-cp38-abi3-manylinux1_x86_64.whl
-uv pip install -r requirements.txt
-uv pip install flash-attn==2.7.3 --no-build-isolation
-uv pip install -U vllm --pre --extra-index-url https: //wheels.vllm.ai/nightly --index-strategy unsafe-best-match
-
+# uv pip install -U vllm --pre --extra-index-url https: //wheels.vllm.ai/nightly --index-strategy unsafe-best-match
 
 uv venv --python 3.12.9
 uv pip install torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu118
@@ -23,22 +17,19 @@ wget https://github.com/vllm-project/vllm/releases/download/v0.8.5/vllm-0.8.5+cu
 uv pip install ./vllm-0.8.5+cu118-cp38-abi3-manylinux1_x86_64.whl  
 uv pip install flash-attn==2.7.3 --no-build-isolation --index-url https://pypi.tuna.tsinghua.edu.cn/simple
    uv pip install flash-attn==2.7.3 --no-build-isolation --verbose
-
-
-pip install -r requirements.txt
 ```
 
 ## 启动服务
 
 ```bash
-python start_server.py
+python start_vllm.py
 ```
 
 服务启动后访问地址：
 
-- API服务: <http://localhost:8000>
-- API文档: <http://localhost:8000/docs>
-- 健康检查: <http://localhost:8000/health>
+- API服务: <http://localhost:9003>
+- API文档: <http://localhost:9003/docs>
+- 健康检查: <http://localhost:9003/health>
 
 ## API接口
 
@@ -48,31 +39,15 @@ python start_server.py
 - **参数**: `file` (图片文件)
 - **返回**: JSON格式的识别结果
 
-#### 请求示例
-
-```bash
-curl -X POST "http://localhost:8000/ocr" \
-     -H "accept: application/json" \
-     -H "Content-Type: multipart/form-data" \
-     -F "file=@your_image.jpg"
-```
 
 #### 返回示例
 
 ```json
 {
   "success": true,
-  "filename": "your_image.jpg",
+  "url": "your_file_url",
   "result": "识别出的文字内容..."
 }
-```
-
-## 测试客户端
-
-使用提供的测试脚本：
-
-```bash
-python test_client.py path/to/your/image.jpg
 ```
 
 ## 支持的图片格式
@@ -81,6 +56,7 @@ python test_client.py path/to/your/image.jpg
 - PNG  
 - BMP
 - TIFF
+- PDF
 - 其他PIL支持的格式
 
 ## 注意事项

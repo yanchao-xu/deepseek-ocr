@@ -6,7 +6,7 @@ from PIL import Image
 from typing import List
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
-from config import PROMPT, CROP_MODE
+from config import PROMPT, CROP_MODE, NUM_WORKERS
 
 def create_sampling_params() -> SamplingParams:
     """创建采样参数"""
@@ -37,7 +37,7 @@ def process_single_image(image: Image.Image):
         "multi_modal_data": {"image": DeepseekOCRProcessor().tokenize_with_images(images=[image], bos=True, eos=True, cropping=CROP_MODE)},
     }
 
-def process_images_batch_ocr(llm_engine: LLM, images: List[Image.Image], num_workers: int = 4) -> str:
+def process_images_batch_ocr(llm_engine: LLM, images: List[Image.Image], num_workers: int = NUM_WORKERS) -> str:
     """批量处理图片OCR"""
 
     
@@ -64,34 +64,3 @@ def process_images_batch_ocr(llm_engine: LLM, images: List[Image.Image], num_wor
             results.append(content)
     
     return "\n\n".join(results)
-
-
-async def ocr_generate_async(engine: AsyncLLMEngine, image_features, prompt: str = "<image>") -> str:
-    """异步OCR识别生成（保持向后兼容）"""
-    logits_processors = [NoRepeatNGramLogitsProcessor(
-        ngram_size=30, window_size=90, whitelist_token_ids={128821, 128822}
-    )]
-    
-    sampling_params = SamplingParams(
-        temperature=0.0,
-        max_tokens=8192,
-        logits_processors=logits_processors,
-        skip_special_tokens=False,
-    )
-    
-    request_id = f"request-{int(time.time())}"
-    
-    if image_features and '<image>' in prompt:
-        request = {
-            "prompt": prompt,
-            "multi_modal_data": {"image": image_features}
-        }
-    else:
-        request = {"prompt": prompt}
-    
-    result_text = ""
-    async for request_output in engine.generate(request, sampling_params, request_id):
-        if request_output.outputs:
-            result_text = request_output.outputs[0].text
-    
-    return result_text
