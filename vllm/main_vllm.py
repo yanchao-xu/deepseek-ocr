@@ -7,7 +7,7 @@ import torch
 from vllm import LLM
 from vllm.model_executor.models.registry import ModelRegistry
 from deepseek_ocr import DeepseekOCRForCausalLM
-from vllm.config import MODEL_PATH
+from config import MODEL_PATH, PROMPT, MAX_CONCURRENCY, INPUT_PATH
 from utils.file_processor import download_file, get_file_type, pdf_to_images, load_image_from_url
 from utils.ocr_engine import process_images_batch_ocr
 from utils.callback_handler import send_callback, create_success_callback, create_error_callback
@@ -32,19 +32,17 @@ app.add_middleware(
 # 初始化OCR引擎
 print("正在加载OCR模型...")
 llm = LLM(
-        model=MODEL_PATH,
-        hf_overrides={"architectures": ["DeepseekOCRForCausalLM"]},
-        enforce_eager=True,
-        trust_remote_code=True,
-        max_model_len=512,   # 减少到512
-        max_num_seqs=1,
-        tensor_parallel_size=1,
-        gpu_memory_utilization=0.3,
-        disable_mm_preprocessor_cache=True,
-        enable_chunked_prefill=False,
-        max_num_batched_tokens=512,  # 保持相等
-        block_size=4,
-        swap_space=0,
+        model=MODEL_PATH,  
+        hf_overrides={"architectures": ["DeepseekOCRForCausalLM"]},  
+        block_size=256,  
+        enforce_eager=False,  
+        trust_remote_code=True,   
+        max_model_len=8192,  # 确保这里是 8192,不是 512  
+        swap_space=0,  
+        max_num_seqs=MAX_CONCURRENCY,  
+        tensor_parallel_size=1,  
+        gpu_memory_utilization=0.3,  
+        disable_mm_preprocessor_cache=True   
     )
 print("OCR模型加载完成！")
 
@@ -54,7 +52,6 @@ class OCRUrlRequest(BaseModel):
 class OCRAsyncRequest(BaseModel):
     url: str
     callback_url: str
-
 
 
 @app.post("/ocr")
@@ -97,7 +94,7 @@ def process_ocr_async(url: str, callback_url: str):
         else:
             raise ValueError("不支持的文件格式")
         
-        result = process_images_batch_ocr(llm, images)
+        result = process_images_batch_ocr(llm, images, PROMPT)
         callback_data = create_success_callback(url, result)
         
     except Exception as e:

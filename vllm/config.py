@@ -21,10 +21,10 @@ MODEL_PATH = '/root/models/DeepSeek-OCR' # change to your model path
 # .jpg, .png, .jpeg: run_dpsk_ocr_image.py; 
 # Omnidocbench images path: run_dpsk_ocr_eval_batch.py
 
-INPUT_PATH = '' 
-OUTPUT_PATH = ''
+INPUT_PATH = './test_ocr.pdf'
+OUTPUT_PATH = '../output'
 
-PROMPT = '<image>\n<|grounding|>Convert the document to markdown.'
+PROMPT = '<image>\nFree OCR.'
 # PROMPT = '<image>\nFree OCR.'
 # TODO commonly used prompts
 # document: <image>\n<|grounding|>Convert the document to markdown.

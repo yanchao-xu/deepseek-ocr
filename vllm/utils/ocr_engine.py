@@ -4,7 +4,9 @@ from process.ngram_norepeat import NoRepeatNGramLogitsProcessor
 from process.image_process import DeepseekOCRProcessor
 from PIL import Image
 from typing import List
-
+from concurrent.futures import ThreadPoolExecutor
+from tqdm import tqdm
+from config import PROMPT, CROP_MODE
 
 def create_sampling_params() -> SamplingParams:
     """创建采样参数"""
@@ -23,20 +25,28 @@ def create_sampling_params() -> SamplingParams:
 
 def process_image_for_ocr(image: Image.Image, cropping: bool = False) -> any:
     """处理图片用于OCR"""
+    # return image.convert("RGB") 
     return DeepseekOCRProcessor().tokenize_with_images(
         images=[image], bos=True, eos=True, cropping=cropping
     )
 
+def process_single_image(image: Image.Image):
 
-def process_images_batch_ocr(llm_engine: LLM, images: List[Image.Image], prompt: str = "<image>") -> str:
+    return {
+        "prompt": PROMPT,
+        "multi_modal_data": {"image": DeepseekOCRProcessor().tokenize_with_images(images=[image], bos=True, eos=True, cropping=CROP_MODE)},
+    }
+
+def process_images_batch_ocr(llm_engine: LLM, images: List[Image.Image], num_workers: int = 4) -> str:
     """批量处理图片OCR"""
-    batch_inputs = []
-    for image in images:
-        cache_item = {
-            "prompt": prompt,
-            "multi_modal_data": {"image": process_image_for_ocr(image)},
-        }
-        batch_inputs.append(cache_item)
+
+    
+    with ThreadPoolExecutor(max_workers=num_workers) as executor:
+        batch_inputs = list(tqdm(
+            executor.map(process_single_image, images),
+            total=len(images),
+            desc="Pre-processing images"
+        ))
     
     sampling_params = create_sampling_params()
     outputs_list = llm_engine.generate(batch_inputs, sampling_params=sampling_params)
