@@ -14,11 +14,11 @@ os.environ['VLLM_USE_V1'] = '0'
 os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 
 
-from vllm.config import MODEL_PATH, INPUT_PATH, OUTPUT_PATH, PROMPT, SKIP_REPEAT, MAX_CONCURRENCY, NUM_WORKERS, CROP_MODE
+from config import MODEL_PATH, INPUT_PATH, OUTPUT_PATH, PROMPT, SKIP_REPEAT, MAX_CONCURRENCY, NUM_WORKERS, CROP_MODE
 
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
-from vllm.deepseek_ocr import DeepseekOCRForCausalLM
+from deepseek_ocr import DeepseekOCRForCausalLM
 
 from vllm.model_executor.models.registry import ModelRegistry
 
@@ -30,17 +30,17 @@ ModelRegistry.register_model("DeepseekOCRForCausalLM", DeepseekOCRForCausalLM)
 
 
 llm = LLM(
-    model=MODEL_PATH,
-    hf_overrides={"architectures": ["DeepseekOCRForCausalLM"]},
-    block_size=256,
-    enforce_eager=False,
-    trust_remote_code=True, 
-    max_model_len=8192,
-    swap_space=0,
-    max_num_seqs=MAX_CONCURRENCY,
-    tensor_parallel_size=1,
-    gpu_memory_utilization=0.9,
-    disable_mm_preprocessor_cache=True
+    model=MODEL_PATH,  
+    hf_overrides={"architectures": ["DeepseekOCRForCausalLM"]},  
+    block_size=256,  
+    enforce_eager=False,  
+    trust_remote_code=True,   
+    max_model_len=8192,  # 确保这里是 8192,不是 512  
+    swap_space=0,  
+    max_num_seqs=MAX_CONCURRENCY,  
+    tensor_parallel_size=1,  
+    gpu_memory_utilization=0.3,  
+    disable_mm_preprocessor_cache=True  
 )
 
 logits_processors = [NoRepeatNGramLogitsProcessor(ngram_size=20, window_size=50, whitelist_token_ids= {128821, 128822})] #window for fast；whitelist_token_ids: <td>,</td>
@@ -327,4 +327,3 @@ if __name__ == "__main__":
 
 
     pil_to_pdf_img2pdf(draw_images, pdf_out_path)
-
