@@ -95,7 +95,6 @@ def ocr_from_url(request: OCRUrlRequest):
             include_caption=request.include_caption
         )
 
-        print("prompt !!!", prompt)
         result = process_images_batch_ocr(llm, images, prompt, ocr_config)
         
         return JSONResponse(content={

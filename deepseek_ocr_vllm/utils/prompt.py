@@ -1,4 +1,5 @@
 from typing import List, Optional
+from enum import Enum
 
 class OCRMode(str, Enum):
     plain_ocr = "plain_ocr"
@@ -75,6 +76,5 @@ def build_image_prompt(
 
     if include_caption and mode not in {"describe"}:
         instruction = instruction + "\nThen add a one-paragraph description of the image."
-
     parts.append(instruction)
     return "\n".join(parts)

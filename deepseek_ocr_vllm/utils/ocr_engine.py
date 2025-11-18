@@ -42,17 +42,10 @@ def create_sampling_params() -> SamplingParams:
     )
 
 
-def process_image_for_ocr(image: Image.Image, cropping: bool = False) -> any:
-    """处理图片用于OCR"""
-    # return image.convert("RGB") 
-    return DeepseekOCRProcessor().tokenize_with_images(
-        images=[image], bos=True, eos=True, cropping=cropping
-    )
-
 def process_single_image(image: Image.Image, prompt: str, crop_mode: bool):
     return {
         "prompt": prompt,
-        "multi_modal_data": {"image": DeepseekOCRProcessor().tokenize_with_images(images=[image], bos=True, eos=True, cropping=crop_mode)},
+        "multi_modal_data": {"image": DeepseekOCRProcessor().tokenize_with_images(images=[image], bos=True, eos=True, cropping=crop_mode, prompt = prompt)},
     }
 
 def process_images_batch_ocr(llm_engine: LLM, images: List[Image.Image], prompt: str, ocr_config: OCRConfig) -> str:
