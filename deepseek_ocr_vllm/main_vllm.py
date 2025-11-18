@@ -7,11 +7,13 @@ import os
 import torch
 from vllm import LLM
 from vllm.model_executor.models.registry import ModelRegistry
+
 from deepseek_ocr import DeepseekOCRForCausalLM
-from config import MODEL_PATH, MAX_CONCURRENCY
+from config import MODEL_PATH, MAX_CONCURRENCY, PROMPT, BASE_SIZE, IMAGE_SIZE, CROP_MODE
 from utils.file_processor import download_file, get_file_type, pdf_to_images, load_image_from_url
 from utils.ocr_engine import process_images_batch_ocr, OCRConfig
 from utils.callback_handler import send_callback, create_success_callback, create_error_callback
+from utils.prompt import build_image_prompt, OCRMode
 
 # 设置环境变量
 if torch.version.cuda == '11.8':
@@ -47,20 +49,23 @@ llm = LLM(
     )
 print("OCR模型加载完成！")
 
-class OCRUrlRequest(BaseModel):
+class OCRBaseRequest(BaseModel):
     url: str
     prompt: Optional[str] = None
-    crop_mode: Optional[bool] = None
-    base_size: Optional[int] = None
-    image_size: Optional[int] = None
+    crop_mode: Optional[bool] = CROP_MODE
+    base_size: Optional[int] = BASE_SIZE
+    image_size: Optional[int] = IMAGE_SIZE
+    mode: Optional[OCRMode] = OCRMode.plain_ocr
+    grounding: Optional[bool] = False
+    find_term: Optional[str] = None
+    schema: Optional[str] = None
+    include_caption: Optional[bool] = False
 
-class OCRAsyncRequest(BaseModel):
-    url: str
+class OCRUrlRequest(OCRBaseRequest):
+    pass
+
+class OCRAsyncRequest(OCRBaseRequest):
     callback_url: str
-    prompt: Optional[str] = None
-    crop_mode: Optional[bool] = None
-    base_size: Optional[int] = None
-    image_size: Optional[int] = None
 
 
 @app.post("/ocr")
@@ -77,8 +82,21 @@ def ocr_from_url(request: OCRUrlRequest):
         else:
             raise HTTPException(status_code=400, detail="不支持的文件格式")
         
+        if not images:
+            raise HTTPException(status_code=400, detail="无法获取图片")
+        
         ocr_config = OCRConfig(request.crop_mode, request.base_size, request.image_size)
-        result = process_images_batch_ocr(llm, images, request.prompt, ocr_config)
+        prompt = build_image_prompt(
+            mode=request.mode,
+            user_prompt=request.prompt or "",
+            grounding=request.grounding,
+            find_term=request.find_term,
+            schema=request.schema,
+            include_caption=request.include_caption
+        )
+
+        print("prompt !!!", prompt)
+        result = process_images_batch_ocr(llm, images, prompt, ocr_config)
         
         return JSONResponse(content={
             "success": True,
@@ -91,32 +109,43 @@ def ocr_from_url(request: OCRUrlRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"识别失败: {str(e)}")
 
-def process_ocr_async(url: str, callback_url: str, prompt: str = None, crop_mode: bool = None, base_size: int = None, image_size: int = None):
+def process_ocr_async(request: OCRAsyncRequest):
     """异步处理OCR任务"""
     try:
-        file_bytes, filename, content_type = download_file(url)
+        file_bytes, filename, content_type = download_file(request.url)
         file_type = get_file_type(filename, content_type)
         
         if file_type == 'pdf':
             images = pdf_to_images(file_bytes)
         elif file_type == 'image':
-            images = [load_image_from_url(url)]
+            images = [load_image_from_url(request.url)]
         else:
             raise ValueError("不支持的文件格式")
         
-        ocr_config = OCRConfig(crop_mode, base_size, image_size)
-        result = process_images_batch_ocr(llm, images, prompt, ocr_config)
-        callback_data = create_success_callback(url, result)
+        if not images:
+            raise ValueError("无法获取图片")
+        
+        ocr_config = OCRConfig(request.crop_mode, request.base_size, request.image_size)
+        final_prompt = build_image_prompt(
+            mode=request.mode,
+            user_prompt=request.prompt or "",
+            grounding=request.grounding,
+            find_term=request.find_term,
+            schema=request.schema,
+            include_caption=request.include_caption
+        )
+        result = process_images_batch_ocr(llm, images, final_prompt, ocr_config)
+        callback_data = create_success_callback(request.url, result)
         
     except Exception as e:
-        callback_data = create_error_callback(url, str(e))
+        callback_data = create_error_callback(request.url, str(e))
     
-    send_callback(callback_url, callback_data)
+    send_callback(request.callback_url, callback_data)
 
 @app.post("/ocr-async")
 def ocr_async(request: OCRAsyncRequest, background_tasks: BackgroundTasks):
     """异步OCR识别接口"""
-    background_tasks.add_task(process_ocr_async, request.url, request.callback_url, request.prompt, request.crop_mode, request.base_size, request.image_size)
+    background_tasks.add_task(process_ocr_async, request)
     return JSONResponse(content={
         "success": True,
         "message": "任务已提交，结果将通过回调返回"

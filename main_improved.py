@@ -10,15 +10,15 @@ import json
 from vllm import AsyncLLMEngine
 from vllm.engine.arg_utils import AsyncEngineArgs
 from vllm.model_executor.models.registry import ModelRegistry
-from vllm.deepseek_ocr import DeepseekOCRForCausalLM
-from vllm.config import MODEL_PATH
-from utils.file_processor import (
+from deepseek_ocr_hf.deepseek_ocr import DeepseekOCRForCausalLM
+from deepseek_ocr_hf.config import MODEL_PATH
+from deepseek_ocr_hf.utils.file_processor import (
     load_image_from_bytes, 
     extract_text_from_pdf, 
     extract_text_from_docx, 
     get_file_type
 )
-from utils.ocr_engine import ocr_generate, process_image_for_ocr
+from deepseek_ocr_hf.utils.ocr_engine import ocr_generate, process_image_for_ocr
 
 # 设置环境变量
 if torch.version.cuda == '11.8':

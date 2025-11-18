@@ -1,5 +1,19 @@
 from typing import List, Optional
 
+class OCRMode(str, Enum):
+    plain_ocr = "plain_ocr"
+    markdown = "markdown"
+    tables_csv = "tables_csv"
+    tables_md = "tables_md"
+    kv_json = "kv_json"
+    figure_chart = "figure_chart"
+    find_ref = "find_ref"
+    layout_map = "layout_map"
+    pii_redact = "pii_redact"
+    multilingual = "multilingual"
+    describe = "describe"
+    freeform = "freeform"
+
 def build_image_prompt(
     mode: str,
     user_prompt: str,

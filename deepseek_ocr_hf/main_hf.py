@@ -1,8 +1,8 @@
 import os
+import sys
 import re
 import tempfile
 import shutil
-import sys
 from typing import List, Dict, Any, Optional
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
@@ -12,12 +12,12 @@ import torch
 from transformers import AutoModel, AutoTokenizer
 from PIL import Image
 import uvicorn
-import config
-from utils.prompt import build_image_prompt
 
-# Add parent directory to path before importing local modules
+# Add parent directory to path to import utils
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from deepseek_ocr_hf import config
+from deepseek_ocr_vllm.utils.prompt import build_image_prompt, OCRMode
 # -----------------------------
 # Lifespan context for model loading
 # -----------------------------
@@ -181,7 +181,7 @@ async def health():
 @app.post("/api/ocr")
 async def ocr_inference(
     image: UploadFile = File(...),
-    mode: str = Form("plain_ocr"),
+    mode: OCRMode = Form(OCRMode.plain_ocr),
     prompt: str = Form(""),
     grounding: bool = Form(False),
     include_caption: bool = Form(False),

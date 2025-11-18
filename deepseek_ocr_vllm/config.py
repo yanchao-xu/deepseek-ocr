@@ -8,15 +8,15 @@ API_PORT = 9003
 # Large: base_size = 1280, image_size = 1280, crop_mode = False
 # Gundam: base_size = 1024, image_size = 640, crop_mode = True
 
-BASE_SIZE = 1024 #Base image processing size (affects memory usage)
-IMAGE_SIZE = 640 #Tile size for dynamic cropping
-CROP_MODE = True #Enable/disable dynamic image cropping
+BASE_SIZE = 1024
+IMAGE_SIZE = 640
+CROP_MODE = True
 MIN_CROPS= 2
 MAX_CROPS= 6 # max:9; If your GPU memory is small, it is recommended to set it to 6.
 MAX_CONCURRENCY = 100 # If you have limited GPU memory, lower the concurrency count.
-NUM_WORKERS = 4 # image pre-process (resize/padding) workers 
+NUM_WORKERS = 64 # image pre-process (resize/padding) workers 
 PRINT_NUM_VIS_TOKENS = False
-# SKIP_REPEAT = True
+SKIP_REPEAT = True
 MODEL_PATH = '/root/models/DeepSeek-OCR' # change to your model path
 
 # TODO: change INPUT_PATH
@@ -24,10 +24,10 @@ MODEL_PATH = '/root/models/DeepSeek-OCR' # change to your model path
 # .jpg, .png, .jpeg: run_dpsk_ocr_image.py; 
 # Omnidocbench images path: run_dpsk_ocr_eval_batch.py
 
-# INPUT_PATH = ''
-# OUTPUT_PATH = ''
+INPUT_PATH = ''
+OUTPUT_PATH = ''
 
-PROMPT = '<image>\nFree OCR.'
+PROMPT = '<image>\nDescribe this image in detail.'
 # PROMPT = '<image>\nFree OCR.'
 # TODO commonly used prompts
 # document: <image>\n<|grounding|>Convert the document to markdown.
