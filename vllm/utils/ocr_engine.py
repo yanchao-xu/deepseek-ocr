@@ -3,10 +3,29 @@ from vllm import LLM, AsyncLLMEngine, SamplingParams
 from process.ngram_norepeat import NoRepeatNGramLogitsProcessor
 from process.image_process import DeepseekOCRProcessor
 from PIL import Image
-from typing import List
+from typing import List, Optional
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
-from config import PROMPT, CROP_MODE, NUM_WORKERS
+from config import NUM_WORKERS
+import config
+
+class OCRConfig:
+    def __init__(self, crop_mode: Optional[bool] = None, base_size: Optional[int] = None, image_size: Optional[int] = None):
+        self.crop_mode = crop_mode
+        self.base_size = base_size
+        self.image_size = image_size
+
+def update_config_params(prompt: str = None, ocr_config: OCRConfig = None):
+    """更新config参数"""
+    if prompt is not None:
+        config.PROMPT = prompt
+    if ocr_config is not None:
+        if ocr_config.crop_mode is not None:
+            config.CROP_MODE = ocr_config.crop_mode
+        if ocr_config.base_size is not None:
+            config.BASE_SIZE = ocr_config.base_size
+        if ocr_config.image_size is not None:
+            config.IMAGE_SIZE = ocr_config.image_size
 
 def create_sampling_params() -> SamplingParams:
     """创建采样参数"""
@@ -30,20 +49,20 @@ def process_image_for_ocr(image: Image.Image, cropping: bool = False) -> any:
         images=[image], bos=True, eos=True, cropping=cropping
     )
 
-def process_single_image(image: Image.Image):
-
+def process_single_image(image: Image.Image, prompt: str, crop_mode: bool):
     return {
-        "prompt": PROMPT,
-        "multi_modal_data": {"image": DeepseekOCRProcessor().tokenize_with_images(images=[image], bos=True, eos=True, cropping=CROP_MODE)},
+        "prompt": prompt,
+        "multi_modal_data": {"image": DeepseekOCRProcessor().tokenize_with_images(images=[image], bos=True, eos=True, cropping=crop_mode)},
     }
 
-def process_images_batch_ocr(llm_engine: LLM, images: List[Image.Image], num_workers: int = NUM_WORKERS) -> str:
+def process_images_batch_ocr(llm_engine: LLM, images: List[Image.Image], prompt: str, ocr_config: OCRConfig) -> str:
     """批量处理图片OCR"""
-
+    update_config_params(prompt, ocr_config)
+    crop_mode = ocr_config.crop_mode if ocr_config.crop_mode is not None else config.CROP_MODE
     
-    with ThreadPoolExecutor(max_workers=num_workers) as executor:
+    with ThreadPoolExecutor(max_workers=NUM_WORKERS) as executor:
         batch_inputs = list(tqdm(
-            executor.map(process_single_image, images),
+            executor.map(lambda img: process_single_image(img, prompt, crop_mode), images),
             total=len(images),
             desc="Pre-processing images"
         ))
