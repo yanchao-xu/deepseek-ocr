@@ -24,8 +24,8 @@ MODEL_PATH = '/root/models/DeepSeek-OCR' # change to your model path
 # .jpg, .png, .jpeg: run_dpsk_ocr_image.py; 
 # Omnidocbench images path: run_dpsk_ocr_eval_batch.py
 
-INPUT_PATH = ''
-OUTPUT_PATH = ''
+INPUT_PATH = 'test.pdf'
+OUTPUT_PATH = '../output'
 
 PROMPT = '<image>\nDescribe this image in detail.'
 # PROMPT = '<image>\nFree OCR.'

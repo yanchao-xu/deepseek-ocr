@@ -4,6 +4,7 @@ from enum import Enum
 class OCRMode(str, Enum):
     plain_ocr = "plain_ocr"
     markdown = "markdown"
+    html="html"
     tables_csv = "tables_csv"
     tables_md = "tables_md"
     kv_json = "kv_json"
@@ -25,7 +26,7 @@ def build_image_prompt(
 ) -> str:
     """Build the prompt based on mode"""
     parts: List[str] = ["<image>"]
-    mode_requires_grounding = mode in {"find_ref", "layout_map", "pii_redact"}
+    mode_requires_grounding = mode in {"find_ref", "layout_map", "pii_redact", "html"}
     if grounding or mode_requires_grounding:
         parts.append("<|grounding|>")
 
@@ -34,6 +35,8 @@ def build_image_prompt(
         instruction = "Free OCR."
     elif mode == "markdown":
         instruction = "Convert the document to markdown."
+    elif mode == "html":
+        instruction = "Convert the document to HTML format."
     elif mode == "tables_csv":
         instruction = (
             "Extract every table and output CSV only. "

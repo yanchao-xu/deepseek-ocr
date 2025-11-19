@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 import os
 import torch
@@ -14,6 +14,7 @@ from utils.file_processor import download_file, get_file_type, pdf_to_images, lo
 from utils.ocr_engine import process_images_batch_ocr, OCRConfig
 from utils.callback_handler import send_callback, create_success_callback, create_error_callback
 from utils.prompt import build_image_prompt, OCRMode
+from utils.grounding_parser import clean_grounding_text, parse_detections, parse_multi_image_results
 
 # 设置环境变量
 if torch.version.cuda == '11.8':
@@ -50,22 +51,23 @@ llm = LLM(
 print("OCR模型加载完成！")
 
 class OCRBaseRequest(BaseModel):
-    url: str
-    prompt: Optional[str] = None
-    crop_mode: Optional[bool] = CROP_MODE
-    base_size: Optional[int] = BASE_SIZE
-    image_size: Optional[int] = IMAGE_SIZE
-    mode: Optional[OCRMode] = OCRMode.plain_ocr
-    grounding: Optional[bool] = False
-    find_term: Optional[str] = None
-    schema: Optional[str] = None
-    include_caption: Optional[bool] = False
+    url: str = Field(..., description="图片或PDF文件的URL地址")
+    prompt: Optional[str] = Field(None, description="自定义提示词，用于指导OCR识别")
+    crop_mode: Optional[bool] = Field(CROP_MODE, description="是否启用裁剪模式，提高长文档识别精度")
+    base_size: Optional[int] = Field(BASE_SIZE, description="图片预处理基础尺寸")
+    image_size: Optional[int] = Field(IMAGE_SIZE, description="图片输入模型的尺寸")
+    mode: Optional[OCRMode] = Field(OCRMode.plain_ocr, description="OCR识别模式")
+    grounding: Optional[bool] = Field(False, description="是否启用定位功能，返回文本位置信息")
+    find_term: Optional[str] = Field(None, description="查找特定词汇，配合grounding使用")
+    schema: Optional[str] = Field(None, description="结构化输出模式的schema定义")
+    include_caption: Optional[bool] = Field(False, description="是否包含图片描述信息")
 
 class OCRUrlRequest(OCRBaseRequest):
+    """同步OCR识别请求参数"""
     pass
 
 class OCRAsyncRequest(OCRBaseRequest):
-    callback_url: str
+    callback_url: str = Field(..., description="异步处理完成后的回调URL地址")
 
 
 @app.post("/ocr")
@@ -95,12 +97,39 @@ def ocr_from_url(request: OCRUrlRequest):
             include_caption=request.include_caption
         )
 
-        result = process_images_batch_ocr(llm, images, prompt, ocr_config)
+        raw_result = process_images_batch_ocr(llm, images, prompt, ocr_config)
+        
+        # Parse results with correct dimensions for each image
+        display_text, boxes, image_dims = parse_multi_image_results(raw_result, images)
+        
+        # If display text is empty after cleaning but we have boxes, show the labels
+        if not display_text and boxes:
+            display_text = ", ".join([b["label"] for b in boxes])
+        
+        # Debug information for grounding issues
+        grounding_debug = {
+            "prompt_used": prompt,
+            "has_grounding_tag": "<|grounding|>" in prompt,
+            "raw_contains_ref": "<|ref|>" in raw_result,
+            "raw_contains_det": "<|det|>" in raw_result,
+            "raw_contains_grounding": "<|grounding|>" in raw_result,
+            "boxes_found": len(boxes)
+        }
         
         return JSONResponse(content={
             "success": True,
-            "url": request.url,
-            "result": result
+            "text": display_text,
+            "raw_text": raw_result,
+            "boxes": boxes,
+            "image_dims": image_dims[0] if len(image_dims) == 1 else image_dims,
+            "metadata": {
+                "mode": request.mode,
+                "grounding": request.grounding or (request.mode in {"find_ref", "layout_map", "pii_redact"}),
+                "base_size": request.base_size,
+                "image_size": request.image_size,
+                "crop_mode": request.crop_mode
+            },
+            "debug": grounding_debug
         })
         
     except HTTPException:
@@ -133,7 +162,39 @@ def process_ocr_async(request: OCRAsyncRequest):
             schema=request.schema,
             include_caption=request.include_caption
         )
-        result = process_images_batch_ocr(llm, images, final_prompt, ocr_config)
+        raw_result = process_images_batch_ocr(llm, images, final_prompt, ocr_config)
+        
+        # Parse results with correct dimensions for each image
+        display_text, boxes, image_dims = parse_multi_image_results(raw_result, images)
+        
+        # If display text is empty after cleaning but we have boxes, show the labels
+        if not display_text and boxes:
+            display_text = ", ".join([b["label"] for b in boxes])
+        
+        # Debug information for grounding issues
+        grounding_debug = {
+            "prompt_used": final_prompt,
+            "has_grounding_tag": "<|grounding|>" in final_prompt,
+            "raw_contains_ref": "<|ref|>" in raw_result,
+            "raw_contains_det": "<|det|>" in raw_result,
+            "raw_contains_grounding": "<|grounding|>" in raw_result,
+            "boxes_found": len(boxes)
+        }
+        
+        result = {
+            "text": display_text,
+            "raw_text": raw_result,
+            "boxes": boxes,
+            "image_dims": image_dims[0] if len(image_dims) == 1 else image_dims,
+            "metadata": {
+                "mode": request.mode,
+                "grounding": request.grounding or (request.mode in {"find_ref", "layout_map", "pii_redact"}),
+                "base_size": request.base_size,
+                "image_size": request.image_size,
+                "crop_mode": request.crop_mode
+            },
+            "debug": grounding_debug
+        }
         callback_data = create_success_callback(request.url, result)
         
     except Exception as e:
