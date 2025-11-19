@@ -1,3 +1,6 @@
+API_HOST = '0.0.0.0'
+API_PORT = 9003
+
 # TODO: change modes
 # Tiny: base_size = 512, image_size = 512, crop_mode = False
 # Small: base_size = 640, image_size = 640, crop_mode = False
@@ -21,10 +24,10 @@ MODEL_PATH = '/root/models/DeepSeek-OCR' # change to your model path
 # .jpg, .png, .jpeg: run_dpsk_ocr_image.py; 
 # Omnidocbench images path: run_dpsk_ocr_eval_batch.py
 
-INPUT_PATH = './test_ocr.pdf'
+INPUT_PATH = 'test.pdf'
 OUTPUT_PATH = '../output'
 
-PROMPT = '<image>\nFree OCR.'
+PROMPT = '<image>\nDescribe this image in detail.'
 # PROMPT = '<image>\nFree OCR.'
 # TODO commonly used prompts
 # document: <image>\n<|grounding|>Convert the document to markdown.
