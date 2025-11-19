@@ -12,9 +12,10 @@ from deepseek_ocr import DeepseekOCRForCausalLM
 from config import MODEL_PATH, MAX_CONCURRENCY, PROMPT, BASE_SIZE, IMAGE_SIZE, CROP_MODE
 from utils.file_processor import download_file, get_file_type, pdf_to_images, load_image_from_url
 from utils.ocr_engine import process_images_batch_ocr, OCRConfig
-from utils.callback_handler import send_callback, create_success_callback, create_error_callback
+from utils.callback_handler import send_callback, send_callback_with_zip, create_callback
+from utils.zip_generator import create_zip_with_markdown_and_images
 from utils.prompt import build_image_prompt, OCRMode
-from utils.grounding_parser import clean_grounding_text, parse_detections, parse_multi_image_results
+from utils.grounding_parser import parse_multi_image_results
 
 # 设置环境变量
 if torch.version.cuda == '11.8':
@@ -56,7 +57,7 @@ class OCRBaseRequest(BaseModel):
     crop_mode: Optional[bool] = Field(CROP_MODE, description="是否启用裁剪模式，提高长文档识别精度")
     base_size: Optional[int] = Field(BASE_SIZE, description="图片预处理基础尺寸")
     image_size: Optional[int] = Field(IMAGE_SIZE, description="图片输入模型的尺寸")
-    mode: Optional[OCRMode] = Field(OCRMode.plain_ocr, description="OCR识别模式")
+    mode: Optional[str] = Field("plain_ocr", description="OCR识别模式")
     grounding: Optional[bool] = Field(False, description="是否启用定位功能，返回文本位置信息")
     find_term: Optional[str] = Field(None, description="查找特定词汇，配合grounding使用")
     schema: Optional[str] = Field(None, description="结构化输出模式的schema定义")
@@ -68,139 +69,94 @@ class OCRUrlRequest(OCRBaseRequest):
 
 class OCRAsyncRequest(OCRBaseRequest):
     callback_url: str = Field(..., description="异步处理完成后的回调URL地址")
+    include_zip: Optional[bool] = Field(False, description="是否在回调中包含zip文件（包含markdown和图片）")
+
+
+def process_ocr_core(request: OCRBaseRequest):
+    """核心OCR处理逻辑"""
+    file_bytes, filename, content_type = download_file(request.url)
+    file_type = get_file_type(filename, content_type)
+    
+    if file_type == 'pdf':
+        images = pdf_to_images(file_bytes)
+    elif file_type == 'image':
+        images = [load_image_from_url(request.url)]
+    else:
+        raise ValueError("不支持的文件格式")
+    
+    if not images:
+        raise ValueError("无法获取图片")
+    
+    ocr_config = OCRConfig(request.crop_mode, request.base_size, request.image_size)
+    prompt = build_image_prompt(
+        mode=request.mode,
+        user_prompt=request.prompt or "",
+        grounding=request.grounding,
+        find_term=request.find_term,
+        schema=request.schema,
+        include_caption=request.include_caption
+    )
+    
+    raw_result = process_images_batch_ocr(llm, images, prompt, ocr_config)
+    display_text, boxes, image_dims = parse_multi_image_results(raw_result, images)
+    
+    if not display_text and boxes:
+        display_text = ", ".join([b["label"] for b in boxes])
+    
+    grounding_debug = {
+        "prompt_used": prompt,
+        "has_grounding_tag": "<|grounding|>" in prompt,
+        "raw_contains_ref": "<|ref|>" in raw_result,
+        "raw_contains_det": "<|det|>" in raw_result,
+        "raw_contains_grounding": "<|grounding|>" in raw_result,
+        "boxes_found": len(boxes)
+    }
+    
+    result = {
+        "text": display_text,
+        "raw_text": raw_result,
+        "boxes": boxes,
+        "image_dims": image_dims[0] if len(image_dims) == 1 else image_dims,
+        "metadata": {
+            "mode": request.mode,
+            "grounding": request.grounding or (request.mode in {"find_ref", "layout_map", "pii_redact"}),
+            "base_size": request.base_size,
+            "image_size": request.image_size,
+            "crop_mode": request.crop_mode
+        },
+        "debug": grounding_debug
+    }
+    
+    return result, images, filename, raw_result
 
 
 @app.post("/ocr")
 def ocr_from_url(request: OCRUrlRequest):
     """同步OCR识别接口"""
     try:
-        file_bytes, filename, content_type = download_file(request.url)
-        file_type = get_file_type(filename, content_type)
-        
-        if file_type == 'pdf':
-            images = pdf_to_images(file_bytes)
-        elif file_type == 'image':
-            images = [load_image_from_url(request.url)]
-        else:
-            raise HTTPException(status_code=400, detail="不支持的文件格式")
-        
-        if not images:
-            raise HTTPException(status_code=400, detail="无法获取图片")
-        
-        ocr_config = OCRConfig(request.crop_mode, request.base_size, request.image_size)
-        prompt = build_image_prompt(
-            mode=request.mode,
-            user_prompt=request.prompt or "",
-            grounding=request.grounding,
-            find_term=request.find_term,
-            schema=request.schema,
-            include_caption=request.include_caption
-        )
-
-        raw_result = process_images_batch_ocr(llm, images, prompt, ocr_config)
-        
-        # Parse results with correct dimensions for each image
-        display_text, boxes, image_dims = parse_multi_image_results(raw_result, images)
-        
-        # If display text is empty after cleaning but we have boxes, show the labels
-        if not display_text and boxes:
-            display_text = ", ".join([b["label"] for b in boxes])
-        
-        # Debug information for grounding issues
-        grounding_debug = {
-            "prompt_used": prompt,
-            "has_grounding_tag": "<|grounding|>" in prompt,
-            "raw_contains_ref": "<|ref|>" in raw_result,
-            "raw_contains_det": "<|det|>" in raw_result,
-            "raw_contains_grounding": "<|grounding|>" in raw_result,
-            "boxes_found": len(boxes)
-        }
-        
-        return JSONResponse(content={
-            "success": True,
-            "text": display_text,
-            "raw_text": raw_result,
-            "boxes": boxes,
-            "image_dims": image_dims[0] if len(image_dims) == 1 else image_dims,
-            "metadata": {
-                "mode": request.mode,
-                "grounding": request.grounding or (request.mode in {"find_ref", "layout_map", "pii_redact"}),
-                "base_size": request.base_size,
-                "image_size": request.image_size,
-                "crop_mode": request.crop_mode
-            },
-            "debug": grounding_debug
-        })
-        
-    except HTTPException:
-        raise
+        result, _, _, _ = process_ocr_core(request)
+        return JSONResponse(content={"success": True, **result})
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"识别失败: {str(e)}")
 
 def process_ocr_async(request: OCRAsyncRequest):
     """异步处理OCR任务"""
     try:
-        file_bytes, filename, content_type = download_file(request.url)
-        file_type = get_file_type(filename, content_type)
+        result, images, filename, raw_result = process_ocr_core(request)
         
-        if file_type == 'pdf':
-            images = pdf_to_images(file_bytes)
-        elif file_type == 'image':
-            images = [load_image_from_url(request.url)]
+        if request.include_zip:
+            zip_filename = filename.replace('.pdf', '_ocr.zip') if filename.endswith('.pdf') else f"{filename}_ocr.zip"
+            zip_data = create_zip_with_markdown_and_images(raw_result, images, filename)
+            callback_data = create_callback(request.url, result=result, zip_filename=zip_filename)
+            send_callback_with_zip(request.callback_url, callback_data, zip_data, zip_filename)
         else:
-            raise ValueError("不支持的文件格式")
-        
-        if not images:
-            raise ValueError("无法获取图片")
-        
-        ocr_config = OCRConfig(request.crop_mode, request.base_size, request.image_size)
-        final_prompt = build_image_prompt(
-            mode=request.mode,
-            user_prompt=request.prompt or "",
-            grounding=request.grounding,
-            find_term=request.find_term,
-            schema=request.schema,
-            include_caption=request.include_caption
-        )
-        raw_result = process_images_batch_ocr(llm, images, final_prompt, ocr_config)
-        
-        # Parse results with correct dimensions for each image
-        display_text, boxes, image_dims = parse_multi_image_results(raw_result, images)
-        
-        # If display text is empty after cleaning but we have boxes, show the labels
-        if not display_text and boxes:
-            display_text = ", ".join([b["label"] for b in boxes])
-        
-        # Debug information for grounding issues
-        grounding_debug = {
-            "prompt_used": final_prompt,
-            "has_grounding_tag": "<|grounding|>" in final_prompt,
-            "raw_contains_ref": "<|ref|>" in raw_result,
-            "raw_contains_det": "<|det|>" in raw_result,
-            "raw_contains_grounding": "<|grounding|>" in raw_result,
-            "boxes_found": len(boxes)
-        }
-        
-        result = {
-            "text": display_text,
-            "raw_text": raw_result,
-            "boxes": boxes,
-            "image_dims": image_dims[0] if len(image_dims) == 1 else image_dims,
-            "metadata": {
-                "mode": request.mode,
-                "grounding": request.grounding or (request.mode in {"find_ref", "layout_map", "pii_redact"}),
-                "base_size": request.base_size,
-                "image_size": request.image_size,
-                "crop_mode": request.crop_mode
-            },
-            "debug": grounding_debug
-        }
-        callback_data = create_success_callback(request.url, result)
+            callback_data = create_callback(request.url, result=result)
+            send_callback(request.callback_url, callback_data)
         
     except Exception as e:
-        callback_data = create_error_callback(request.url, str(e))
-    
-    send_callback(request.callback_url, callback_data)
+        send_callback(request.callback_url, create_callback(request.url, success=False, error=str(e)))
 
 @app.post("/ocr-async")
 def ocr_async(request: OCRAsyncRequest, background_tasks: BackgroundTasks):
